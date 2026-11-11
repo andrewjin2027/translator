@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中英 实时翻译</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1218; --panel:#171b23; --panel2:#1e232d; --line:#2a303c;
+  --text:#e9edf3; --muted:#8b95a7; --accent:#e5484d; --accent2:#3e8bff; --ok:#30a46c;
+  --zh-size:26px; --en-size:15px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:Inter,"Noto Sans SC",system-ui,sans-serif;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.02em}
+h1 span{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px}
+.badge{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+.badge b{color:var(--text);font-weight:500}
+.tabs{margin-left:auto;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs button{background:none;border:0;color:var(--muted);padding:7px 16px;border-radius:7px;font:inherit;font-size:14px;cursor:pointer}
+.tabs button.on{background:var(--panel2);color:var(--text)}
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.view{display:none;flex:1;min-height:0;flex-direction:column}
+.view.on{display:flex}
+.toolbar{display:flex;align-items:center;gap:10px;padding:12px 22px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer}
+.btn:hover{border-color:#3a4252}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px}
+label.small{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+input[type=range]{accent-color:var(--accent2);width:90px}
+.mic{display:flex;align-items:center;gap:10px;background:var(--accent);color:#fff;border:0;border-radius:999px;padding:10px 22px 10px 16px;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.mic .dot{width:12px;height:12px;border-radius:50%;background:#fff}
+.mic.live{background:#2b1416;color:#ff8a8d;box-shadow:0 0 0 1px var(--accent) inset}
+.mic.live .dot{background:var(--accent);animation:pulse 1.1s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+.spacer{flex:1}
+.notice{margin:14px 22px 0;padding:12px 14px;border-radius:10px;background:#2a2213;border:1px solid #4a3a17;color:#f1d08a;font-size:13px;line-height:1.6;display:none}
+.notice.show{display:block}
+#transcript{flex:1;overflow-y:auto;padding:18px 22px 40px;scroll-behavior:smooth}
+.empty{color:var(--muted);text-align:center;margin-top:12vh;line-height:1.9;font-size:14px}
+.empty .big{font-size:40px;margin-bottom:6px}
+.seg{padding:12px 0;border-bottom:1px dashed var(--line)}
+.seg .en{color:var(--muted);font-size:var(--en-size);line-height:1.55}
+.seg .zh{font-size:var(--zh-size);line-height:1.5;margin-top:4px;font-family:"Noto Sans SC",sans-serif;font-weight:500}
+.seg .zh.pending{color:#5d6678}
+.seg.interim .en{font-style:italic}
+.seg.interim .zh{color:#aab3c2}
+.seg .time{font-size:11px;color:#59627a;margin-right:8px}
+.seg.fromzh .zh{font-family:Inter,"Noto Sans SC",sans-serif}
+#langBtn.zh{background:#13261c;border-color:var(--ok);color:#8fe0b4}
+/* subtitle mode */
+body.subs header,body.subs .toolbar,body.subs .notice{display:none}
+body.subs #transcript{display:flex;flex-direction:column;justify-content:flex-end;padding:40px 6vw}
+body.subs .seg{border:0}
+body.subs .seg .zh{font-size:calc(var(--zh-size) * 1.6)}
+body.subs .seg:not(:nth-last-child(-n+3)){display:none}
+#exitSubs{position:fixed;top:14px;right:14px;display:none;z-index:5}
+body.subs #exitSubs{display:block}
+/* text view */
+.panes{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:0}
+.pane{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+.pane:last-child{border-right:0}
+.pane h3{margin:0;padding:12px 22px;font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
+textarea{flex:1;resize:none;background:transparent;border:0;outline:0;color:var(--text);padding:6px 22px 22px;font:inherit;font-size:18px;line-height:1.6}
+#textOut{flex:1;overflow-y:auto;padding:6px 22px 22px;font-size:20px;line-height:1.7;font-family:"Noto Sans SC",sans-serif;white-space:pre-wrap}
+#textOut.placeholder{color:#59627a}
+.spin{width:12px;height:12px;border:2px solid #3a4252;border-top-color:var(--accent2);border-radius:50%;animation:sp .8s linear infinite;display:none}
+.spin.on{display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.count{font-size:11px;color:#59627a;margin-left:auto}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a303c;color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%)}
+@media (max-width:720px){
+  .panes{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .pane{border-right:0;border-bottom:1px solid var(--line)}
+  .tabs{margin-left:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>中英 实时翻译<span id="dirLabel">English → 中文</span></h1>
+  <div class="badge">翻译引擎：<b id="engineName">检测中…</b></div>
+  <div class="tabs">
+    <button id="tabVoice" class="on">🎙 语音同传</button>
+    <button id="tabText">⌨ 文本翻译</button>
+  </div>
+</header>
+
+<main>
+  <!-- Voice view -->
+  <section id="viewVoice" class="view on">
+    <div class="toolbar">
+      <button id="micBtn" class="mic"><span class="dot"></span><span id="micLabel">开始收听</span></button>
+      <button class="btn" id="langBtn" title="切换你现在说的语言（快捷键 Tab）">🎙 现在说：英文</button>
+      <select id="accent" title="英文口音">
+        <option value="en-AU">英文（澳大利亚）</option>
+        <option value="en-US">英文（美国）</option>
+        <option value="en-GB">英文（英国）</option>
+        <option value="en-IN">英文（印度）</option>
+      </select>
+      <select id="script1" title="中文字体">
+        <option value="s">简体中文</option>
+        <option value="t">繁體中文</option>
+      </select>
+      <label class="small">字号 <input id="fontSize" type="range" min="18" max="44" value="26"></label>
+      <label class="small"><input id="autoSpeak" type="checkbox"> 自动朗读中文</label>
+      <span class="spacer"></span>
+      <button class="btn" id="subsBtn">字幕模式</button>
+      <button class="btn" id="copyAll">复制全部</button>
+      <button class="btn" id="clearAll">清空</button>
+    </div>
+    <div class="notice" id="micNotice"></div>
+    <div id="transcript">
+      <div class="empty" id="emptyState">
+        <div class="big">🎧</div>
+        点击「开始收听」，对着麦克风说英文<br>
+        英文原文与中文译文会实时逐句显示<br>
+        要说中文翻成英文：点「现在说」按钮或按 Tab 切换
+      </div>
+    </div>
+  </section>
+
+  <!-- Text view -->
+  <section id="viewText" class="view">
+    <div class="panes">
+      <div class="pane">
+        <h3><span id="srcLabel">原文（中英文自动识别）</span> <span class="count" id="charCount">0 字符</span></h3>
+        <textarea id="textIn" placeholder="在此输入或粘贴英文或中文，自动识别方向，边输入边翻译…" spellcheck="false"></textarea>
+      </div>
+      <div class="pane">
+        <h3><span id="outLabel">译文</span> <span class="spin" id="textSpin"></span>
+          <select id="script2" style="margin-left:auto;padding:4px 8px;font-size:12px">
+            <option value="s">简体</option><option value="t">繁體</option>
+          </select>
+          <button class="btn" id="speakOut" style="padding:4px 10px;font-size:12px">朗读</button>
+          <button class="btn" id="copyOut" style="padding:4px 10px;font-size:12px">复制</button>
+        </h3>
+        <div id="textOut" class="placeholder">译文会在这里实时出现</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<button class="btn" id="exitSubs">退出字幕模式 (Esc)</button>
+<div id="toast"></div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const toast = msg => { const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); };
+
+/* ---------------- Settings (light per-viewer convenience) ---------------- */
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem('en2zh_'+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k,v){ try{ localStorage.setItem('en2zh_'+k, JSON.stringify(v)); }catch(e){} }
+};
+let script = store.get('script','s');
+$('script1').value = script; $('script2').value = script;
+$('accent').value = store.get('accent','en-AU');
+$('fontSize').value = store.get('font',26);
+$('autoSpeak').checked = store.get('autoSpeak',false);
+const applyFont = () => { const v=+$('fontSize').value; document.documentElement.style.setProperty('--zh-size', v+'px'); document.documentElement.style.setProperty('--en-size', Math.max(13, Math.round(v*0.58))+'px'); };
+applyFont();
+
+/* ---------------- Translation engines ---------------- */
+let engine = null;        // 'claude' | 'google' | 'mymemory'
+let sample = null;
+const cache = new Map();
+const tlCode = () => script==='t' ? 'zh-TW' : 'zh-CN';
+
+function setEngine(e){
+  engine = e;
+  $('engineName').textContent = {claude:'Claude AI', google:'Google 翻译', mymemory:'MyMemory'}[e] || '不可用';
+}
+
+async function detectEngine(){
+  // 1) Inside Claude artifact viewer: use Claude
+  if (window.claude && typeof window.claude.use === 'function') {
+    try { sample = await window.claude.use('sample'); } catch(e){ sample = null; }
+    if (sample) { setEngine('claude'); return; }
+  }
+  // 2) Standalone: free public endpoints
+  try {
+    const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=hello');
+    if (r.ok) { setEngine('google'); return; }
+  } catch(e){}
+  try {
+    const r = await fetch('https://api.mymemory.translated.net/get?q=hello&langpair=en|zh-CN');
+    if (r.ok) { setEngine('mymemory'); return; }
+  } catch(e){}
+  setEngine(null);
+  $('engineName').textContent = '无法连接';
+}
+
+// from = 'en'：英文 → 中文；from = 'zh'：中文 → 英文
+async function translate(text, {signal, onPartial, context, from='en'} = {}){
+  text = text.trim();
+  if (!text) return '';
+  const sl = from === 'zh' ? 'zh-CN' : 'en';
+  const tl = from === 'zh' ? 'en' : tlCode();
+  const key = sl + '>' + tl + '|' + text;
+  if (cache.has(key)) return cache.get(key);
+  let out = '';
+  if (engine === 'claude') {
+    const ctx = context ? `For context only (do NOT translate this), the previous sentence was: "${context}"\n\n` : '';
+    let prompt;
+    if (from === 'zh') {
+      prompt = `You are a professional real-time Chinese-to-English interpreter. Translate the Mandarin Chinese text below into natural, fluent English. It may be speech-recognition output: fix obvious recognition errors silently. Keep names and numbers accurate. Output ONLY the English translation — no notes, no quotes, no Chinese.\n\n${ctx}Chinese text:\n${text}`;
+    } else {
+      const variety = script==='t' ? 'Traditional Chinese (繁體中文)' : 'Simplified Chinese (简体中文)';
+      prompt = `You are a professional real-time English-to-Chinese interpreter. Translate the English text below into natural, fluent ${variety}. It may be speech-recognition output: fix obvious recognition errors silently and add proper Chinese punctuation. Keep names, brands and numbers accurate. Output ONLY the Chinese translation — no notes, no quotes, no pinyin, no English.\n\n${ctx}English text:\n${text}`;
+    }
+    const r = await sample(prompt, {
+      modelTier:'quick', signal, cache:true,
+      onText: onPartial ? ({text:t}) => { if (t && t !== 'Thinking...') onPartial(t); } : undefined
+    });
+    out = (r.text || '').trim();
+  } else if (engine === 'google') {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url, {signal});
+    const j = await r.json();
+    out = (j[0]||[]).map(x => x[0]).join('');
+  } else if (engine === 'mymemory') {
+    const chunks = (from === 'zh' ? text.match(/[\s\S]{1,450}/g) : text.match(/[\s\S]{1,450}(\s|$)/g)) || [text];
+    const parts = [];
+    for (const c of chunks) {
+      const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(c)}&langpair=${sl}|${tl}`, {signal});
+      const j = await r.json();
+      parts.push(j.responseData?.translatedText || '');
+    }
+    out = parts.join('');
+  } else {
+    throw new Error('no-engine');
+  }
+  if (out) cache.set(key, out);
+  return out;
+}
+
+function errMsg(e){
+  if (e?.name === 'AbortError') return null;
+  if (e?.code === 'rate_limited') return '请求太频繁，请稍候…';
+  if (e?.code === 'not_granted') return '未授权使用 Claude 翻译';
+  if (e?.message === 'no-engine') return '无法连接翻译服务（请检查网络）';
+  return '翻译失败，请重试';
+}
+
+/* ---------------- Chinese read-aloud ---------------- */
+function speakZh(text, en){   // en 为 true 时朗读英文
+  if (!('speechSynthesis' in window) || !text) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = en ? $('accent').value : (script==='t' ? 'zh-TW' : 'zh-CN');
+    const v = speechSynthesis.getVoices().find(v => v.lang.replace('_','-').startsWith(u.lang)) ||
+              speechSynthesis.getVoices().find(v => v.lang.startsWith(en ? 'en' : 'zh'));
+    if (v) u.voice = v;
+    u.rate = 1.05;
+    speechSynthesis.speak(u);
+  } catch(e){}
+}
+
+/* ---------------- Copy ---------------- */
+async function copyText(t){
+  if (!t) { toast('没有可复制的内容'); return; }
+  try { await navigator.clipboard.writeText(t); toast('已复制'); }
+  catch(e){
+    const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('已复制'); }catch(_){ toast('复制失败，请手动选择文本'); }
+    ta.remove();
+  }
+}
+
+/* ---------------- Tabs ---------------- */
+function showTab(which){
+  $('tabVoice').classList.toggle('on', which==='voice');
+  $('tabText').classList.toggle('on', which==='text');
+  $('viewVoice').classList.toggle('on', which==='voice');
+  $('viewText').classList.toggle('on', which==='text');
+  if (which==='text') $('textIn').focus();
+}
+$('tabVoice').onclick = () => showTab('voice');
+$('tabText').onclick = () => showTab('text');
+
+/* ---------------- Voice: live interpretation ---------------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const transcript = $('transcript');
+const segments = [];   // {en, zh, el, time}
+let rec = null, listening = false, interimEl = null, interimTimer = null, interimAbort = null, lastInterim = '';
+let speakLang = 'en';   // 'en' 说英文 → 出中文；'zh' 说中文 → 出英文
+
+function showNotice(html){ const n=$('micNotice'); n.innerHTML=html; n.classList.add('show'); }
+const DOWNLOAD_HINT = '语音同传需要麦克风。当前网页预览环境不允许使用麦克风——请把本页面的 <b>HTML 文件下载到电脑，用 Chrome 或 Edge 打开</b>即可使用。<br>现在你也可以切换到「⌨ 文本翻译」，粘贴英文实时翻译。';
+
+if (!SR) showNotice('当前浏览器不支持语音识别。请使用电脑版 <b>Chrome</b> 或 <b>Edge</b> 打开本页面。<br>你仍可使用「⌨ 文本翻译」。');
+
+const atBottom = () => transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 120;
+const scrollDown = (force) => { if (force || atBottom()) transcript.scrollTop = transcript.scrollHeight; };
+const hhmm = () => new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+function makeSeg(cls){
+  $('emptyState')?.remove();
+  const el = document.createElement('div');
+  el.className = 'seg ' + (cls||'');
+  el.innerHTML = '<div class="en"></div><div class="zh pending">…</div>';
+  transcript.appendChild(el);
+  return el;
+}
+
+function ensureInterim(){
+  if (!interimEl) interimEl = makeSeg('interim');
+  transcript.appendChild(interimEl); // keep last
+  return interimEl;
+}
+
+function clearInterim(){
+  clearTimeout(interimTimer); interimTimer=null;
+  if (interimAbort) { interimAbort.abort(); interimAbort=null; }
+  if (interimEl) { interimEl.remove(); interimEl=null; }
+  lastInterim='';
+}
+
+function scheduleInterimTranslate(text){
+  // throttle partial translations so the Chinese keeps up while you talk
+  const delay = engine==='claude' ? 1400 : 600;
+  if (interimTimer) return;
+  interimTimer = setTimeout(async () => {
+    interimTimer = null;
+    const t = lastInterim, from = speakLang;
+    // 中文没有空格，按字数判断；英文按词数
+    if (!t || (from === 'zh' ? t.length < 6 : t.split(/\s+/).length < 3) || !interimEl) return;
+    if (interimAbort) interimAbort.abort();
+    const ac = new AbortController(); interimAbort = ac;
+    try {
+      const zh = await translate(t, {signal: ac.signal, context: segments.at(-1)?.en, from});
+      if (interimEl && !ac.signal.aborted) { const z=interimEl.querySelector('.zh'); z.textContent=zh; z.classList.remove('pending'); }
+    } catch(e){}
+  }, delay);
+}
+
+async function finalizeSegment(text, from = speakLang){
+  text = text.trim();
+  if (!text) return;
+  const seg = {en:text, zh:'', time:hhmm(), from};
+  const context = segments.at(-1)?.en;
+  segments.push(seg);
+  const el = makeSeg(from === 'zh' ? 'fromzh' : '');
+  seg.el = el;
+  el.querySelector('.en').innerHTML = `<span class="time">${seg.time}</span>`;
+  el.querySelector('.en').append(text);
+  if (interimEl) transcript.appendChild(interimEl);
+  scrollDown(true);
+  const z = el.querySelector('.zh');
+  try {
+    seg.zh = await translate(text, {context, from, onPartial: t => { z.textContent=t; z.classList.remove('pending'); scrollDown(); }});
+    z.textContent = seg.zh; z.classList.remove('pending');
+    if ($('autoSpeak').checked) speakZh(seg.zh, from === 'zh');
+  } catch(e){
+    const m = errMsg(e); z.textContent = m ? '⚠ '+m : '';
+    if (e?.code==='rate_limited') setTimeout(()=>retrySeg(seg), 4000);
+  }
+  scrollDown();
+}
+
+async function retrySeg(seg){
+  const z = seg.el.querySelector('.zh');
+  try { seg.zh = await translate(seg.en, {from: seg.from}); z.textContent = seg.zh; } catch(e){}
+}
+
+function startListening(){
+  if (!SR) { toast('浏览器不支持语音识别'); return; }
+  if (!engine) { toast('翻译服务不可用'); }
+  rec = new SR();
+  rec.lang = speakLang === 'zh' ? 'zh-CN' : $('accent').value;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = ev => {
+    let interim = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i];
+      if (r.isFinal) { clearInterim(); finalizeSegment(r[0].transcript, ev.target.lang === 'zh-CN' ? 'zh' : 'en'); }
+      else interim += r[0].transcript;
+    }
+    interim = interim.trim();
+    if (interim) {
+      const el = ensureInterim();
+      el.querySelector('.en').textContent = interim;
+      lastInterim = interim;
+      scheduleInterimTranslate(interim);
+      scrollDown();
+    }
+  };
+  rec.onerror = ev => {
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed' || ev.error === 'audio-capture') {
+      stopListening();
+      showNotice(window.self !== window.top ? DOWNLOAD_HINT :
+        '无法访问麦克风。请在浏览器地址栏左侧的权限设置中允许本页面使用麦克风，然后重试。');
+    } else if (ev.error === 'network') {
+      toast('语音识别需要联网，请检查网络');
+    }
+  };
+  rec.onend = () => { if (listening) { try { rec.start(); } catch(e){} } }; // Chrome stops after silence; keep going
+  try { rec.start(); } catch(e){ showNotice(DOWNLOAD_HINT); return; }
+  listening = true;
+  $('micBtn').classList.add('live'); $('micLabel').textContent = '正在收听… 点击停止';
+}
+
+function stopListening(){
+  listening = false;
+  try { rec && rec.stop(); } catch(e){}
+  $('micBtn').classList.remove('live'); $('micLabel').textContent = '开始收听';
+  if (lastInterim) { const t=lastInterim; clearInterim(); finalizeSegment(t); } else clearInterim();
+}
+
+$('micBtn').onclick = () => listening ? stopListening() : startListening();
+$('accent').onchange = () => { store.set('accent',$('accent').value); if (listening){ stopListening(); startListening(); } };
+
+/* ---------------- 中翻英：切换说话语言 ---------------- */
+// 浏览器语音识别一次只能听一种语言，所以说中文时要手动切换（按钮或 Tab 键）
+function setSpeakLang(l){
+  if (l === speakLang) return;
+  const was = listening;
+  if (was) stopListening();          // 先按原来的语言收尾
+  speakLang = l;
+  const b = $('langBtn');
+  b.textContent = l === 'zh' ? '🎙 现在说：中文' : '🎙 现在说：英文';
+  b.classList.toggle('zh', l === 'zh');
+  $('dirLabel').textContent = l === 'zh' ? '中文 → English' : 'English → 中文';
+  if (was) startListening();
+  toast(l === 'zh' ? '已切换：说中文，翻成英文' : '已切换：说英文，翻成中文');
+}
+$('langBtn').onclick = () => setSpeakLang(speakLang === 'zh' ? 'en' : 'zh');
+document.addEventListener('keydown', e => {
+  const t = e.target.tagName;
+  if (e.key === 'Tab' && t !== 'TEXTAREA' && t !== 'INPUT' && t !== 'SELECT') { e.preventDefault(); setSpeakLang(speakLang === 'zh' ? 'en' : 'zh'); }
+});
+$('fontSize').oninput = () => { applyFont(); store.set('font',+$('fontSize').value); };
+$('autoSpeak').onchange = () => store.set('autoSpeak',$('autoSpeak').checked);
+
+function setScript(v){
+  script = v; store.set('script',v);
+  $('script1').value = v; $('script2').value = v;
+  runTextTranslate();
+}
+$('script1').onchange = e => setScript(e.target.value);
+$('script2').onchange = e => setScript(e.target.value);
+
+$('copyAll').onclick = () => copyText(segments.map(s => `${s.en}\n${s.zh}`).join('\n\n'));
+$('clearAll').onclick = () => {
+  if (!segments.length) return;
+  segments.length = 0; clearInterim();
+  transcript.innerHTML = '<div class="empty" id="emptyState"><div class="big">🎧</div>已清空。点击「开始收听」继续。</div>';
+};
+$('subsBtn').onclick = () => { document.body.classList.add('subs'); try{ document.documentElement.requestFullscreen?.().catch(()=>{}); }catch(e){} scrollDown(true); };
+const exitSubs = () => { document.body.classList.remove('subs'); try{ document.fullscreenElement && document.exitFullscreen(); }catch(e){} };
+$('exitSubs').onclick = exitSubs;
+document.addEventListener('keydown', e => { if (e.key==='Escape') exitSubs(); });
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.body.classList.remove('subs'); });
+
+/* ---------------- Text: translate as you type ---------------- */
+let textTimer = null, textAbort = null, textFrom = 'en';
+function runTextTranslate(){
+  const src = $('textIn').value;
+  $('charCount').textContent = src.length + ' 字符';
+  clearTimeout(textTimer);
+  const out = $('textOut');
+  if (!src.trim()) {
+    if (textAbort) textAbort.abort(); out.textContent='译文会在这里实时出现'; out.classList.add('placeholder'); $('textSpin').classList.remove('on');
+    $('srcLabel').textContent = '原文（中英文自动识别）'; $('outLabel').textContent = '译文';
+    return;
+  }
+  // 自动识别方向：汉字占三成以上就当作中文，翻成英文
+  const cjk = (src.match(/[㐀-鿿]/g) || []).length;
+  const from = cjk / src.replace(/\s/g,'').length > 0.3 ? 'zh' : 'en';
+  textFrom = from;
+  $('srcLabel').textContent = from === 'zh' ? '中文原文' : 'ENGLISH 英文原文';
+  $('outLabel').textContent = from === 'zh' ? 'English 译文' : '中文译文';
+  textTimer = setTimeout(async () => {
+    if (textAbort) textAbort.abort();
+    const ac = new AbortController(); textAbort = ac;
+    $('textSpin').classList.add('on');
+    try {
+      const zh = await translate(src, {signal: ac.signal, from, onPartial: t => { if(!ac.signal.aborted){ out.textContent=t; out.classList.remove('placeholder'); } }});
+      if (!ac.signal.aborted) { out.textContent = zh; out.classList.remove('placeholder'); }
+    } catch(e){
+      const m = errMsg(e); if (m && !ac.signal.aborted) { out.textContent = '⚠ ' + m; out.classList.add('placeholder'); }
+    } finally { if (textAbort===ac) $('textSpin').classList.remove('on'); }
+  }, engine==='claude' ? 900 : 450);
+}
+$('textIn').addEventListener('input', runTextTranslate);
+$('copyOut').onclick = () => { const o=$('textOut'); copyText(o.classList.contains('placeholder')?'':o.textContent); };
+$('speakOut').onclick = () => { const o=$('textOut'); if(!o.classList.contains('placeholder')) speakZh(o.textContent, textFrom === 'zh'); };
+
+/* ---------------- Boot ---------------- */
+detectEngine().then(() => {
+  // Inside the sandboxed preview the microphone is blocked: say so up front
+  if (engine === 'claude' && SR) showNotice(DOWNLOAD_HINT.replace('当前网页预览环境不允许使用麦克风——','当前网页预览环境可能不允许使用麦克风；如点击后无法收听，'));
+});
+if ('speechSynthesis' in window) speechSynthesis.getVoices();
+})();
+</script>
+</body>
+</html>
