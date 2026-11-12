@@ -117,7 +117,6 @@ textarea{flex:1;resize:none;background:transparent;border:0;outline:0;color:var(
         <option value="t" data-i18n="tradLong">繁體中文</option>
       </select>
       <label class="small"><span data-i18n="fontSize">字号</span> <input id="fontSize" type="range" min="18" max="96" value="26"></label>
-      <label class="small"><input id="autoSpeak" type="checkbox"> <span data-i18n="autoSpeak">自动朗读译文</span></label>
       <span class="spacer"></span>
       <button class="btn" id="subsBtn" data-i18n="subs">字幕模式</button>
       <button class="btn" id="copyAll" data-i18n="copyAll">复制全部</button>
@@ -174,7 +173,7 @@ const I18N = {
     langBtnTitle:'切换你现在说的语言（快捷键 Tab）', speakingEn:'🎙 现在说：英文', speakingZh:'🎙 现在说：中文',
     accentTitle:'英文口音', enAU:'英文（澳大利亚）', enUS:'英文（美国）', enGB:'英文（英国）', enIN:'英文（印度）',
     scriptTitle:'中文字体', simpLong:'简体中文', tradLong:'繁體中文', simpShort:'简体', tradShort:'繁體',
-    fontSize:'字号', autoSpeak:'自动朗读译文', subs:'字幕模式', copyAll:'复制全部', clear:'清空',
+    fontSize:'字号', subs:'字幕模式', copyAll:'复制全部', clear:'清空',
     emptyHtml:'<div class="big">🎧</div>点击「开始收听」，对着麦克风说英文<br>英文原文与中文译文会实时逐句显示<br>要说中文翻成英文：点「现在说」按钮或按 Tab 切换',
     clearedHtml:'<div class="big">🎧</div>已清空。点击「开始收听」继续。',
     srcAuto:'原文（中英文自动识别）', srcZh:'中文原文', srcEn:'ENGLISH 英文原文',
@@ -199,7 +198,7 @@ const I18N = {
     langBtnTitle:'Switch the language you are speaking (shortcut: Tab)', speakingEn:'🎙 Speaking: English', speakingZh:'🎙 Speaking: Chinese',
     accentTitle:'English accent', enAU:'English (Australia)', enUS:'English (US)', enGB:'English (UK)', enIN:'English (India)',
     scriptTitle:'Chinese script', simpLong:'Simplified Chinese', tradLong:'Traditional Chinese', simpShort:'Simplified', tradShort:'Traditional',
-    fontSize:'Font size', autoSpeak:'Read translation aloud', subs:'Subtitle mode', copyAll:'Copy all', clear:'Clear',
+    fontSize:'Font size', subs:'Subtitle mode', copyAll:'Copy all', clear:'Clear',
     emptyHtml:'<div class="big">🎧</div>Click “Start listening” and speak English into the microphone<br>The English and its Chinese translation appear sentence by sentence<br>To speak Chinese and get English: click the “Speaking” button or press Tab',
     clearedHtml:'<div class="big">🎧</div>Cleared. Click “Start listening” to continue.',
     srcAuto:'Source (detects Chinese or English)', srcZh:'Chinese source', srcEn:'English source',
@@ -241,7 +240,6 @@ let script = store.get('script','s');
 $('script1').value = script; $('script2').value = script;
 $('accent').value = store.get('accent','en-AU');
 $('fontSize').value = store.get('font',26);
-$('autoSpeak').checked = store.get('autoSpeak',false);
 const applyFont = () => { const v=+$('fontSize').value; document.documentElement.style.setProperty('--zh-size', v+'px'); document.documentElement.style.setProperty('--en-size', Math.max(13, Math.round(v*0.58))+'px'); };
 applyFont();
 
@@ -443,7 +441,6 @@ async function finalizeSegment(text, from = speakLang){
   try {
     seg.zh = await translate(text, {context, from, onPartial: t => { z.textContent=t; z.classList.remove('pending'); scrollDown(); }});
     z.textContent = seg.zh; z.classList.remove('pending');
-    if ($('autoSpeak').checked) speakZh(seg.zh, from === 'zh');
   } catch(e){
     const m = errMsg(e); z.textContent = m ? '⚠ '+m : '';
     if (e?.code==='rate_limited') setTimeout(()=>retrySeg(seg), 4000);
@@ -528,7 +525,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Tab' && t !== 'TEXTAREA' && t !== 'INPUT' && t !== 'SELECT') { e.preventDefault(); setSpeakLang(speakLang === 'zh' ? 'en' : 'zh'); }
 });
 $('fontSize').oninput = () => { applyFont(); store.set('font',+$('fontSize').value); };
-$('autoSpeak').onchange = () => store.set('autoSpeak',$('autoSpeak').checked);
 
 function setScript(v){
   script = v; store.set('script',v);

@@ -109,7 +109,6 @@ textarea{flex:1;resize:none;background:transparent;border:0;outline:0;color:var(
         <option value="t">繁體中文</option>
       </select>
       <label class="small">字号 <input id="fontSize" type="range" min="18" max="96" value="26"></label>
-      <label class="small"><input id="autoSpeak" type="checkbox"> 自动朗读中文</label>
       <span class="spacer"></span>
       <button class="btn" id="subsBtn">字幕模式</button>
       <button class="btn" id="copyAll">复制全部</button>
@@ -164,7 +163,6 @@ let script = store.get('script','s');
 $('script1').value = script; $('script2').value = script;
 $('accent').value = store.get('accent','en-AU');
 $('fontSize').value = store.get('font',26);
-$('autoSpeak').checked = store.get('autoSpeak',false);
 const applyFont = () => { const v=+$('fontSize').value; document.documentElement.style.setProperty('--zh-size', v+'px'); document.documentElement.style.setProperty('--en-size', Math.max(13, Math.round(v*0.58))+'px'); };
 applyFont();
 
@@ -358,7 +356,6 @@ async function finalizeSegment(text, from = speakLang){
   try {
     seg.zh = await translate(text, {context, from, onPartial: t => { z.textContent=t; z.classList.remove('pending'); scrollDown(); }});
     z.textContent = seg.zh; z.classList.remove('pending');
-    if ($('autoSpeak').checked) speakZh(seg.zh, from === 'zh');
   } catch(e){
     const m = errMsg(e); z.textContent = m ? '⚠ '+m : '';
     if (e?.code==='rate_limited') setTimeout(()=>retrySeg(seg), 4000);
@@ -441,7 +438,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Tab' && t !== 'TEXTAREA' && t !== 'INPUT' && t !== 'SELECT') { e.preventDefault(); setSpeakLang(speakLang === 'zh' ? 'en' : 'zh'); }
 });
 $('fontSize').oninput = () => { applyFont(); store.set('font',+$('fontSize').value); };
-$('autoSpeak').onchange = () => store.set('autoSpeak',$('autoSpeak').checked);
 
 function setScript(v){
   script = v; store.set('script',v);
